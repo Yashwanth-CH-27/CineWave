@@ -1,0 +1,26 @@
+{
+  "name": "cinewave-monorepo",
+  "version": "1.0.0",
+  "description": "CineWave - Full-Stack Entertainment & OTT Video Streaming Platform",
+  "private": true,
+  "scripts": {
+    "install:server": "npm install --prefix server",
+    "install:client": "npm install --prefix client",
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "seed": "npm run seed --prefix server",
+    "start:server": "npm start --prefix server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build:client": "npm run build --prefix client"
+  },
+  "keywords": [
+    "cinewave",
+    "ott",
+    "streaming",
+    "mern",
+    "razorpay",
+    "nodemailer"
+  ],
+  "author": "CineWave Team",
+  "license": "ISC"
+}

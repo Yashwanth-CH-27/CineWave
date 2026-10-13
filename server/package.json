@@ -1,0 +1,36 @@
+{
+  "name": "cinewave-server",
+  "version": "1.0.0",
+  "description": "CineWave Video Streaming Platform - Backend API",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node src/seed.js"
+  },
+  "keywords": [
+    "cinewave",
+    "streaming",
+    "express",
+    "mongodb",
+    "jwt",
+    "razorpay"
+  ],
+  "author": "CineWave Team",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.20.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.4.1",
+    "nodemailer": "^6.9.13",
+    "razorpay": "^2.9.4"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^9.2.1"
+  }
+}
