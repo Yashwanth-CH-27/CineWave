@@ -15,13 +15,26 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Allowed frontend origins
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://cine-wave-teal.vercel.app',
+];
+
 // Middleware
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   })
 );
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -72,11 +85,11 @@ async function startServer() {
     await initEmailTransporter();
 
     app.listen(PORT, () => {
-      console.log(`\n=================================================`);
+      console.log('\n=================================================');
       console.log(`🚀 CineWave Server is running on port ${PORT}`);
       console.log(`📡 Base API URL: http://localhost:${PORT}/api`);
       console.log(`🎬 Health check: http://localhost:${PORT}/api/health`);
-      console.log(`=================================================\n`);
+      console.log('=================================================\n');
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);
