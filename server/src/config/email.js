@@ -1,4 +1,6 @@
+
 const nodemailer = require('nodemailer');
+
 const {
   getWelcomeEmail,
   getLoginNotificationEmail,
@@ -6,18 +8,46 @@ const {
 } = require('../utils/emailTemplates');
 
 let transporter = null;
+let resendClient = null;
 
-// Initialize Nodemailer Transporter (async — calls verify() to test connection)
+// Initialize email provider
 async function initEmailTransporter() {
+  const provider = process.env.EMAIL_PROVIDER || 'smtp';
+
+  // Production: Resend API
+  if (provider === 'resend') {
+    try {
+      const apiKey = process.env.RESEND_API_KEY;
+
+      if (!apiKey) {
+        throw new Error('RESEND_API_KEY is not configured');
+      }
+
+      // Dynamic import keeps compatibility with CommonJS
+      const { Resend } = await import('resend');
+
+      resendClient = new Resend(apiKey);
+
+      console.log('[Email Service] Resend API configured successfully.');
+      return;
+    } catch (error) {
+      console.error('[Email Service] Resend initialization failed:', error.message);
+      resendClient = null;
+      return;
+    }
+  }
+
+  // Local development: Gmail SMTP
   try {
-    const host = process.env.SMTP_HOST || 'smtp.ethereal.email';
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const port = parseInt(process.env.SMTP_PORT || '587', 10);
-    const secure = process.env.SMTP_SECURE === 'true'; // false for port 587 STARTTLS, true for port 465 SSL
+    const secure = process.env.SMTP_SECURE === 'true';
+
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
 
     if (!user || !pass) {
-      console.warn('[Email Service] ⚠️  SMTP_USER or SMTP_PASS not set — emails will be skipped.');
+      console.warn('[Email Service] SMTP credentials missing.');
       return;
     }
 
@@ -26,60 +56,112 @@ async function initEmailTransporter() {
       port,
       secure,
       auth: { user, pass },
-      tls: {
-        rejectUnauthorized: false,
-      },
     });
 
-    // Verify the connection so we get an error immediately if credentials are wrong
     await transporter.verify();
-    console.log(`[Email Service] ✅ SMTP connected — ${host}:${port} (secure=${secure})`);
+
+    console.log(`[Email Service] SMTP connected: ${host}:${port}`);
   } catch (error) {
-    console.error('[Email Service] ❌ SMTP connection FAILED:', error.message);
-    console.error('[Email Service] 🔧 Fix: Make sure Gmail 2-Step Verification is ON, then generate a fresh App Password at https://myaccount.google.com/apppasswords');
-    transporter = null; // safeSendMail will skip gracefully when transporter is null
+    console.error('[Email Service] SMTP connection failed:', error.message);
+    transporter = null;
   }
 }
 
-// Send email non-blockingly — never crashes the user's login/signup flow
+// Common email sending function
 async function safeSendMail(to, subject, html) {
   try {
+    const provider = process.env.EMAIL_PROVIDER || 'smtp';
+
+    // Send using Resend
+    if (provider === 'resend') {
+      if (!resendClient) {
+        await initEmailTransporter();
+      }
+
+      if (!resendClient) {
+        return { success: false, error: 'Resend not configured' };
+      }
+
+      const { data, error } = await resendClient.emails.send({
+        from: process.env.RESEND_FROM || 'CineWave <onboarding@resend.dev>',
+        to: [to],
+        subject,
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      console.log(`[Email Service] Email sent via Resend to: ${to}`);
+
+      return {
+        success: true,
+        messageId: data?.id,
+      };
+    }
+
+    // Send using Gmail SMTP
     if (!transporter) {
       await initEmailTransporter();
     }
 
     if (!transporter) {
-      console.warn(`[Email Service] Skipping email to ${to} — transporter not available.`);
+      console.warn(`[Email Service] SMTP unavailable for ${to}`);
       return { success: false, error: 'SMTP not configured' };
     }
 
-    const from = process.env.SMTP_FROM || '"CineWave OTT" <no-reply@cinewave.tv>';
+    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
 
-    const info = await transporter.sendMail({ from, to, subject, html });
+    const info = await transporter.sendMail({
+      from,
+      to,
+      subject,
+      html,
+    });
 
-    console.log(`[Email Service] ✅ Email sent to: ${to} (ID: ${info.messageId})`);
-    if (nodemailer.getTestMessageUrl(info)) {
-      console.log(`[Email Service] 🔗 Ethereal preview: ${nodemailer.getTestMessageUrl(info)}`);
-    }
-    return { success: true, messageId: info.messageId };
+    console.log(`[Email Service] Email sent via SMTP to: ${to}`);
+
+    return {
+      success: true,
+      messageId: info.messageId,
+    };
+
   } catch (error) {
-    console.warn(`[Email Service] ⚠️  Failed to send email to ${to}:`, error.message);
-    return { success: false, error: error.message };
+    console.error(`[Email Service] Failed to send email to ${to}:`, error.message);
+
+    return {
+      success: false,
+      error: error.message,
+    };
   }
 }
 
+// Welcome email
 async function sendWelcomeEmail(user) {
   const { subject, html } = getWelcomeEmail(user.name, user.role);
   return safeSendMail(user.email, subject, html);
 }
 
+// Login notification
 async function sendLoginAlertEmail(user, clientIp) {
-  const { subject, html } = getLoginNotificationEmail(user.name, user.email, clientIp, new Date());
+  const { subject, html } = getLoginNotificationEmail(
+    user.name,
+    user.email,
+    clientIp,
+    new Date()
+  );
+
   return safeSendMail(user.email, subject, html);
 }
 
+// Payment receipt
 async function sendPaymentReceiptEmail(user, paymentDetails) {
-  const { subject, html } = getPaymentConfirmationEmail(user.name, paymentDetails);
+  const { subject, html } = getPaymentConfirmationEmail(
+    user.name,
+    paymentDetails
+  );
+
   return safeSendMail(user.email, subject, html);
 }
 
